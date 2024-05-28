@@ -24,6 +24,9 @@ use kernel::{
     fmt,
 };
 
+use core::ops::{Deref, DerefMut};
+use core::result::Result::Ok;
+
 module! {
     type: RustMiscDev,
     name: "rust_miscdev",
@@ -62,33 +65,53 @@ impl file::Operations for RustFile {
     type Data = Arc<RustMiscdevData>;
     type OpenData = Arc<RustMiscdevData>;
 
-    fn open(_shared: &Arc<RustMiscdevData>, _file: &file::File) -> Result<Self::Data> {
+    fn open(shared: &Arc<RustMiscdevData>, _file: &file::File) -> Result<Self::Data> {
         pr_info!("open in miscdevice\n",);
         //TODO
-        todo!()
+        return Ok(shared.clone())
     }
 
     fn read(
-        _shared: ArcBorrow<'_, RustMiscdevData>,
+        shared: ArcBorrow<'_, RustMiscdevData>,
         _file: &File,
-        _writer: &mut impl IoBufferWriter,
-        _offset: u64,
+        writer: &mut impl IoBufferWriter,
+        offset: u64,
     ) -> Result<usize> {
-        pr_info!("read in miscdevice\n");
+        pr_info!("read in miscdevice offset:{}, len:{}\n", offset, writer.len());
         //TODO
-        todo!()
+        if offset >= GLOBALMEM_SIZE as u64{
+            return Ok(0)
+        }
+
+        let holder = shared.deref().inner.lock();
+
+        let len = core::cmp::min(offset + writer.len() as u64, GLOBALMEM_SIZE as u64);
+
+        let _ = writer.write_slice(&holder[offset as usize .. len as usize])?;
+        Ok(len as usize)
         
     }
 
     fn write(
-        _shared: ArcBorrow<'_, RustMiscdevData>,
+        shared: ArcBorrow<'_, RustMiscdevData>,
         _file: &File,
-        _reader: &mut impl IoBufferReader,
-        _offset: u64,
+        reader: &mut impl IoBufferReader,
+        offset: u64,
     ) -> Result<usize> {
-        pr_info!("write in miscdevice\n");
+        pr_info!("write in miscdevice offset:{}, len:{}\n", offset, reader.len());
         //TODO
-        todo!()
+        if offset >= GLOBALMEM_SIZE as u64{
+            return Ok(0)
+        }
+
+        let mut holder = shared.deref().inner.lock();
+        let data: &mut [u8;GLOBALMEM_SIZE] = holder.deref_mut();
+
+        let len = core::cmp::min(offset + reader.len() as u64, GLOBALMEM_SIZE as u64);
+
+        reader.read_slice(&mut data[offset as usize..len as usize])?;
+         
+        Ok(len as usize)
 
     }
 
